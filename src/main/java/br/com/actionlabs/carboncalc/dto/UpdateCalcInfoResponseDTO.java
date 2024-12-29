@@ -5,4 +5,5 @@ import lombok.Data;
 @Data
 public class UpdateCalcInfoResponseDTO {
   private boolean success;
+
 }
