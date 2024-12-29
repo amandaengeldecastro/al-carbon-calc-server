@@ -93,6 +93,7 @@ public class OpenRestController {
         .orElseGet(() -> {
             EnergyEmissionFactor newFactor = new EnergyEmissionFactor();
             newFactor.setUf(request.getId());
+            /** How to calculate the new value of factor? **/
             newFactor.setFactor(0.0);
             return energyEmissionFactorRepository.save(newFactor);
         });
