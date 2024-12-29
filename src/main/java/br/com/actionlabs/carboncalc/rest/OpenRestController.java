@@ -82,44 +82,54 @@ public class OpenRestController {
   }
 
   /** Should i have to create a new collection?**/
-  @PutMapping("/open/info")
+  @PutMapping("/info")
   public ResponseEntity<Object> updateInfo(@RequestBody UpdateCalcInfoRequestDTO request) {
     UpdateCalcInfoResponseDTO responseDTO = new UpdateCalcInfoResponseDTO();
-
-    if (request.getRecyclePercentage() < 0 || request.getRecyclePercentage() > 1) 
-    return ResponseEntity.badRequest().body("Bad Request: Recycle Percentage inválido.");
-
-    EnergyEmissionFactor energyFactor = energyEmissionFactorRepository.findById(request.getId())
-        .orElseGet(() -> {
-            EnergyEmissionFactor newFactor = new EnergyEmissionFactor();
-            newFactor.setUf(request.getId());
-            /** How to calculate the new value of factor? **/
+    
+    if (request.getRecyclePercentage() < 0 || request.getRecyclePercentage() > 1) {
+      return ResponseEntity.badRequest().body(Map.of("error", "Recycle Percentage inválido."));
+      }
+      
+      EnergyEmissionFactor energyEmissionFactor = energyEmissionFactorRepository.findById(request.getId())
+      .orElseGet(() -> {
+        EnergyEmissionFactor newFactor = new EnergyEmissionFactor();
+        newFactor.setUf(request.getId());
+        /** How to calculate the new value of factor? **/
             newFactor.setFactor(0.0);
             return energyEmissionFactorRepository.save(newFactor);
         });
-    double energyEmission = request.getEnergyConsumption() * energyFactor.getFactor();
+
+    double energyEmission = request.getEnergyConsumption() * energyEmissionFactor.getFactor();
 
     double transportationEmission = 0;
     for (TransportationDTO transportation : request.getTransportation()) {
-        TransportationEmissionFactor transportationFactor = transportationEmissionFactorRepository
-            .findById(TransportationType.valueOf(transportation.getType().name()))
-            .orElse(null);
-        if (transportationFactor == null) {
-            return ResponseEntity.badRequest().body("Bad Request: Type " + transportation.getType() + " inválido.");
+        try {
+            TransportationEmissionFactor transportationEmissionFactor = transportationEmissionFactorRepository
+                .findById(TransportationType.valueOf(transportation.getType().name()))
+                .orElse(null);
+
+            if (transportationEmissionFactor == null) {
+                return ResponseEntity.badRequest().body(Map.of("error", "Type " + transportation.getType() + " inválido."));
+            }
+
+            transportationEmission += transportation.getMonthlyDistance() * transportationEmissionFactor.getFactor();
+        } catch (IllegalArgumentException e) {
+            return ResponseEntity.badRequest().body(Map.of("error", "Type " + transportation.getType() + " inválido."));
         }
-        transportationEmission += transportation.getMonthlyDistance() * transportationFactor.getFactor();
     }
 
-    SolidWasteEmissionFactor solidWasteFactor = solidWasteEmissionFactorRepository.findById(request.getId())
+    SolidWasteEmissionFactor solidWasteEmissionFactor = solidWasteEmissionFactorRepository.findById(request.getId())
         .orElse(null);
-    if (solidWasteFactor == null) {
-        return ResponseEntity.badRequest().body("Bad Request: Emission factor for solid waste not found.");
+    if (solidWasteEmissionFactor == null) {
+        return ResponseEntity.badRequest().body(Map.of("error", "Emission factor for solid waste not found."));
     }
 
-    double solidWasteEmission = request.getSolidWasteTotal() * solidWasteFactor.getRecyclableFactor()
+    double solidWasteEmission = request.getSolidWasteTotal() * solidWasteEmissionFactor.getRecyclableFactor()
         * request.getRecyclePercentage()
-        + request.getSolidWasteTotal() * solidWasteFactor.getNonRecyclableFactor()
+        + request.getSolidWasteTotal() * solidWasteEmissionFactor.getNonRecyclableFactor()
             * (1 - request.getRecyclePercentage());
+
+    double totalEmission = energyEmission + transportationEmission + solidWasteEmission;
 
     responseDTO.setSuccess(true);
 
